@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'models/location_model.dart';
+import 'models/trip_model.dart';
 import 'services/location_service.dart';
+import 'services/trip_service.dart';
 import 'utils/app_logger.dart';
+import 'screens/trips_screen.dart';
 
 void main() {
   runApp(const MainApp());
@@ -13,12 +16,53 @@ class MainApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Travel Location Tracker',
+      title: 'Travel Tracker',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: const LocationScreen(),
+      home: const HomeScreen(),
+    );
+  }
+}
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
+
+  final List<Widget> _screens = [
+    const LocationScreen(),
+    const TripsScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _screens[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.location_on),
+            label: 'Locations',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.luggage),
+            label: 'Trips',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -32,7 +76,9 @@ class LocationScreen extends StatefulWidget {
 
 class _LocationScreenState extends State<LocationScreen> {
   final LocationService _locationService = LocationService.instance;
+  final TripService _tripService = TripService.instance;
   List<LocationModel> _locations = [];
+  TripModel? _activeTrip;
   bool _isLoading = false;
   String _errorMessage = '';
 
@@ -52,8 +98,10 @@ class _LocationScreenState extends State<LocationScreen> {
 
     try {
       final locations = await _locationService.getAllLocations();
+      final activeTrip = await _tripService.getActiveTrip();
       setState(() {
         _locations = locations;
+        _activeTrip = activeTrip;
         _isLoading = false;
       });
       AppLogger.info('Loaded ${locations.length} locations to UI');
@@ -148,13 +196,48 @@ class _LocationScreenState extends State<LocationScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _loadLocations,
-        child: _buildBody(),
+        child: Column(
+          children: [
+            if (_activeTrip != null) _buildActiveTripBanner(),
+            Expanded(child: _buildBody()),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _isLoading ? null : _addNewLocation,
         icon: const Icon(Icons.add_location),
         label: const Text('Add Location'),
         tooltip: 'Add current location',
+      ),
+    );
+  }
+
+  Widget _buildActiveTripBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        border: Border(
+          bottom: BorderSide(color: Colors.green.shade200, width: 2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.trip_origin, color: Colors.green.shade700, size: 24),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Active Trip: ${_activeTrip!.name}',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.green.shade900,
+              ),
+            ),
+          ),
+          Icon(Icons.check_circle, color: Colors.green.shade700, size: 20),
+        ],
       ),
     );
   }
