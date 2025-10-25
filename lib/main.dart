@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'models/location_model.dart';
+import 'services/location_service.dart';
+import 'utils/app_logger.dart';
 
 void main() {
   runApp(const MainApp());
@@ -9,12 +12,288 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text('Hello World!'),
+    return MaterialApp(
+      title: 'Travel Location Tracker',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const LocationScreen(),
+    );
+  }
+}
+
+class LocationScreen extends StatefulWidget {
+  const LocationScreen({super.key});
+
+  @override
+  State<LocationScreen> createState() => _LocationScreenState();
+}
+
+class _LocationScreenState extends State<LocationScreen> {
+  final LocationService _locationService = LocationService.instance;
+  List<LocationModel> _locations = [];
+  bool _isLoading = false;
+  String _errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    AppLogger.debug('LocationScreen initialized');
+    _loadLocations();
+  }
+
+  Future<void> _loadLocations() async {
+    AppLogger.debug('Loading locations from service');
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final locations = await _locationService.getAllLocations();
+      setState(() {
+        _locations = locations;
+        _isLoading = false;
+      });
+      AppLogger.info('Loaded ${locations.length} locations to UI');
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to load locations in UI', e, stackTrace);
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _addNewLocation() async {
+    AppLogger.debug('User requested to add new location');
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      await _locationService.getCurrentLocation();
+      // Reload the list after adding new location
+      await _loadLocations();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location added successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      AppLogger.warning('Failed to add location in UI', e, stackTrace);
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteLocation(int locationId) async {
+    try {
+      await _locationService.deleteLocation(locationId);
+      await _loadLocations();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location deleted'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to delete location in UI', e, stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Delete failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Location Tracker'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _isLoading ? null : _loadLocations,
+            tooltip: 'Refresh list',
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadLocations,
+        child: _buildBody(),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _isLoading ? null : _addNewLocation,
+        icon: const Icon(Icons.add_location),
+        label: const Text('Add Location'),
+        tooltip: 'Add current location',
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading && _locations.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage.isNotEmpty && _locations.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage,
+                style: const TextStyle(color: Colors.red),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadLocations,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_locations.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.location_off,
+              size: 80,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No locations yet',
+              style: TextStyle(
+                fontSize: 20,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tap the button below to add your first location',
+              style: TextStyle(color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(8.0),
+      itemCount: _locations.length,
+      itemBuilder: (context, index) {
+        final location = _locations[index];
+        return _buildLocationCard(location);
+      },
+    );
+  }
+
+  Widget _buildLocationCard(LocationModel location) {
+    final date = DateTime.fromMillisecondsSinceEpoch(location.timestamp);
+    final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
+        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      elevation: 2,
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.blue,
+          child: Icon(
+            location.tripId != null ? Icons.trip_origin : Icons.location_on,
+            color: Colors.white,
+          ),
+        ),
+        title: Text(
+          '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text('📍 ${location.address}'),
+            Text('🕐 $dateStr'),
+            Text('📏 Accuracy: ${location.accuracy.toStringAsFixed(2)} m'),
+            if (location.tripId != null)
+              Text('🗺️  Trip ID: ${location.tripId}'),
+          ],
+        ),
+        isThreeLine: true,
+        trailing: IconButton(
+          icon: const Icon(Icons.delete, color: Colors.red),
+          onPressed: () => _confirmDelete(location),
+          tooltip: 'Delete location',
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(LocationModel location) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Location'),
+        content: Text(
+          'Delete location at ${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && location.id != null) {
+      await _deleteLocation(location.id!);
+    }
   }
 }
