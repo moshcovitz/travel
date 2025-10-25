@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:photo_manager/photo_manager.dart';
 import '../models/trip_model.dart';
 import '../models/location_model.dart';
 import '../services/trip_service.dart';
+import '../services/photo_service.dart';
 import '../utils/app_logger.dart';
 
 class TripDetailScreen extends StatefulWidget {
@@ -15,9 +17,12 @@ class TripDetailScreen extends StatefulWidget {
 
 class _TripDetailScreenState extends State<TripDetailScreen> {
   final TripService _tripService = TripService.instance;
+  final PhotoService _photoService = PhotoService.instance;
   List<LocationModel> _locations = [];
   Map<String, dynamic>? _statistics;
+  List<AssetEntity> _photos = [];
   bool _isLoading = false;
+  bool _isLoadingPhotos = false;
   String _errorMessage = '';
 
   @override
@@ -25,6 +30,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     super.initState();
     AppLogger.debug('TripDetailScreen initialized for trip ${widget.trip.id}');
     _loadTripData();
+    _loadPhotos();
   }
 
   Future<void> _loadTripData() async {
@@ -49,6 +55,33 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadPhotos() async {
+    AppLogger.debug('Loading photos for trip ${widget.trip.id}');
+    setState(() {
+      _isLoadingPhotos = true;
+    });
+
+    try {
+      final startDate = DateTime.fromMillisecondsSinceEpoch(widget.trip.startTimestamp);
+      final endDate = widget.trip.endTimestamp != null
+          ? DateTime.fromMillisecondsSinceEpoch(widget.trip.endTimestamp!)
+          : DateTime.now();
+
+      final photos = await _photoService.getPhotosInDateRange(startDate, endDate);
+
+      setState(() {
+        _photos = photos;
+        _isLoadingPhotos = false;
+      });
+      AppLogger.info('Loaded ${photos.length} photos for trip ${widget.trip.id}');
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to load photos in UI', e, stackTrace);
+      setState(() {
+        _isLoadingPhotos = false;
       });
     }
   }
@@ -168,6 +201,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         const SizedBox(height: 16),
         if (_statistics != null) _buildStatisticsCard(),
         if (_statistics != null) const SizedBox(height: 16),
+        _buildPhotosSection(),
+        const SizedBox(height: 16),
         _buildLocationsSection(),
       ],
     );
@@ -330,6 +365,144 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPhotosSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Photos (${_photos.length})',
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_isLoadingPhotos)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(32.0),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          )
+        else if (_photos.isEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.photo_library_outlined,
+                      size: 48,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'No photos taken during this trip',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else
+          SizedBox(
+            height: 120,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _photos.length,
+              itemBuilder: (context, index) {
+                return _buildPhotoThumbnail(_photos[index]);
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPhotoThumbnail(AssetEntity photo) {
+    return FutureBuilder<Widget>(
+      future: _buildThumbnailImage(photo),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
+          return GestureDetector(
+            onTap: () => _showPhotoDialog(photo),
+            child: Container(
+              width: 120,
+              height: 120,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: snapshot.data!,
+              ),
+            ),
+          );
+        }
+        return Container(
+          width: 120,
+          height: 120,
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Center(child: CircularProgressIndicator()),
+        );
+      },
+    );
+  }
+
+  Future<Widget> _buildThumbnailImage(AssetEntity photo) async {
+    final thumbnail = await photo.thumbnailDataWithSize(
+      const ThumbnailSize(200, 200),
+    );
+    if (thumbnail != null) {
+      return Image.memory(
+        thumbnail,
+        fit: BoxFit.cover,
+      );
+    }
+    return Icon(Icons.broken_image, color: Colors.grey[400], size: 48);
+  }
+
+  Future<void> _showPhotoDialog(AssetEntity photo) async {
+    final file = await photo.file;
+    if (file == null || !mounted) return;
+
+    final photoDate = photo.createDateTime;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppBar(
+              title: Text(_formatDateTime(photoDate)),
+              automaticallyImplyLeading: false,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            Flexible(
+              child: InteractiveViewer(
+                child: Image.file(file),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
