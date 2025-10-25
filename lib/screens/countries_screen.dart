@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/country_service.dart';
 import '../utils/app_logger.dart';
+import '../widgets/world_map_widget.dart';
 
 class CountriesScreen extends StatefulWidget {
   const CountriesScreen({super.key});
@@ -135,7 +136,7 @@ class _CountriesScreenState extends State<CountriesScreen> {
       children: [
         if (_statistics != null) _buildStatisticsCard(),
         const SizedBox(height: 16),
-        _buildWorldMapPlaceholder(),
+        WorldMapWidget(visitedCountries: _visitedCountries),
         const SizedBox(height: 16),
         Text(
           'Visited Countries (${_visitedCountries.length})',
@@ -215,78 +216,6 @@ class _CountriesScreenState extends State<CountriesScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildWorldMapPlaceholder() {
-    return Card(
-      elevation: 3,
-      child: Container(
-        height: 200,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.blue.shade100,
-              Colors.blue.shade50,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Stack(
-          children: [
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.public,
-                    size: 64,
-                    color: Colors.blue.shade300,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'World Map View',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Interactive map coming soon!',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade600,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${_visitedCountries.length} visited',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
