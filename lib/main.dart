@@ -5,6 +5,7 @@ import 'services/location_service.dart';
 import 'services/trip_service.dart';
 import 'utils/app_logger.dart';
 import 'screens/trips_screen.dart';
+import 'screens/countries_screen.dart';
 
 void main() {
   runApp(const MainApp());
@@ -39,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _screens = [
     const LocationScreen(),
     const TripsScreen(),
+    const CountriesScreen(),
   ];
 
   @override
@@ -60,6 +62,10 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.luggage),
             label: 'Trips',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.public),
+            label: 'Countries',
           ),
         ],
       ),
