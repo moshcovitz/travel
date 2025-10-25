@@ -1,5 +1,6 @@
 import 'package:geolocator/geolocator.dart';
-import '../database/schema.dart';
+import '../database/database_helper.dart';
+import '../models/location_model.dart';
 import '../utils/app_logger.dart';
 
 class LocationService {

@@ -1,6 +1,8 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import '../utils/app_logger.dart';
 
+/// Singleton class to manage SQLite database operations
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
@@ -17,6 +19,8 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
+    AppLogger.info('Initializing database at: $path');
+
     return await openDatabase(
       path,
       version: 1,
@@ -25,6 +29,8 @@ class DatabaseHelper {
   }
 
   Future _createDB(Database db, int version) async {
+    AppLogger.info('Creating database tables');
+
     const idType = 'INTEGER PRIMARY KEY AUTOINCREMENT';
     const textType = 'TEXT NOT NULL';
     const realType = 'REAL NOT NULL';
@@ -41,6 +47,8 @@ class DatabaseHelper {
       address $textType
     )
     ''');
+
+    AppLogger.info('Database tables created successfully');
   }
 
   Future<int> insertLocation(Map<String, dynamic> location) async {
@@ -70,50 +78,7 @@ class DatabaseHelper {
 
   Future close() async {
     final db = await instance.database;
+    AppLogger.info('Closing database connection');
     db.close();
-  }
-}
-
-class LocationModel {
-  final int? id;
-  final double latitude;
-  final double longitude;
-  final double altitude;
-  final double accuracy;
-  final int timestamp;
-  final String address;
-
-  LocationModel({
-    this.id,
-    required this.latitude,
-    required this.longitude,
-    required this.altitude,
-    required this.accuracy,
-    required this.timestamp,
-    required this.address,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'latitude': latitude,
-      'longitude': longitude,
-      'altitude': altitude,
-      'accuracy': accuracy,
-      'timestamp': timestamp,
-      'address': address,
-    };
-  }
-
-  factory LocationModel.fromMap(Map<String, dynamic> map) {
-    return LocationModel(
-      id: map['id'] as int?,
-      latitude: map['latitude'] as double,
-      longitude: map['longitude'] as double,
-      altitude: map['altitude'] as double,
-      accuracy: map['accuracy'] as double,
-      timestamp: map['timestamp'] as int,
-      address: map['address'] as String,
-    );
   }
 }
