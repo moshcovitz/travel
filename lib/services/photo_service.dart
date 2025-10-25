@@ -56,7 +56,7 @@ class PhotoService {
       }
 
       // Collect all photos from all albums that fall within the date range
-      List<AssetEntity> allPhotos = [];
+      final Map<String, AssetEntity> photoMap = {};
 
       for (final album in albums) {
         final int photoCount = await album.assetCountAsync;
@@ -65,9 +65,14 @@ class PhotoService {
             start: 0,
             end: photoCount,
           );
-          allPhotos.addAll(photos);
+
+          for (final photo in photos) {
+            photoMap[photo.id] = photo; // Overwrites duplicates automatically
+          }
         }
       }
+
+      final List<AssetEntity> allPhotos = photoMap.values.toList();
 
       // Filter photos by creation date to ensure they're within range
       final filteredPhotos = allPhotos.where((photo) {
