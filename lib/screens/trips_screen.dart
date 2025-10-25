@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/trip_model.dart';
 import '../services/trip_service.dart';
 import '../utils/app_logger.dart';
+import '../utils/debug_data.dart';
 import 'trip_detail_screen.dart';
 import 'create_trip_screen.dart';
 
@@ -191,6 +192,30 @@ class _TripsScreenState extends State<TripsScreen> {
     }
   }
 
+  Future<void> _addSampleData() async {
+    try {
+      await DebugData.addSampleTrips();
+      await _loadTrips();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sample trips added!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add sample data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -198,6 +223,11 @@ class _TripsScreenState extends State<TripsScreen> {
         title: const Text('My Trips'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: _isLoading ? null : _addSampleData,
+            tooltip: 'Add sample trips (Debug)',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _isLoading ? null : _loadTrips,
