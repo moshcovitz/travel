@@ -1,5 +1,6 @@
 import 'package:geolocator/geolocator.dart';
 import '../database/schema.dart';
+import '../utils/app_logger.dart';
 
 class LocationService {
   static final LocationService instance = LocationService._init();
@@ -24,53 +25,71 @@ class LocationService {
   /// Get current location
   Future<Position?> getCurrentLocation() async {
     try {
+      AppLogger.info('Getting current location');
+
       // Check if location services are enabled
       bool serviceEnabled = await isLocationServiceEnabled();
       if (!serviceEnabled) {
+        AppLogger.warning('Location services are disabled');
         throw Exception('Location services are disabled. Please enable location services in Settings.');
       }
+      AppLogger.debug('Location services are enabled');
 
       // Check permissions
       LocationPermission permission = await checkPermission();
+      AppLogger.debug('Current permission status: $permission');
 
       if (permission == LocationPermission.denied) {
+        AppLogger.info('Requesting location permission');
         permission = await requestPermission();
         if (permission == LocationPermission.denied) {
+          AppLogger.warning('Location permissions denied by user');
           throw Exception('Location permissions are denied');
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
+        AppLogger.warning('Location permissions permanently denied');
         throw Exception('Location permissions are permanently denied. Please enable them in Settings.');
       }
 
       // Get current position
+      AppLogger.debug('Fetching current position with high accuracy');
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
+
+      AppLogger.info('Location retrieved: Lat ${position.latitude.toStringAsFixed(6)}, Lon ${position.longitude.toStringAsFixed(6)}');
 
       // Save to database
       await _saveLocationToDatabase(position);
 
       return position;
-    } catch (e) {
-      print('Error getting location: $e');
+    } catch (e, stackTrace) {
+      AppLogger.error('Error getting location', e, stackTrace);
       rethrow;
     }
   }
 
   /// Save location to database
   Future<void> _saveLocationToDatabase(Position position) async {
-    final location = LocationModel(
-      latitude: position.latitude,
-      longitude: position.longitude,
-      altitude: position.altitude,
-      accuracy: position.accuracy,
-      timestamp: position.timestamp.millisecondsSinceEpoch,
-      address: 'Lat: ${position.latitude.toStringAsFixed(6)}, Lon: ${position.longitude.toStringAsFixed(6)}',
-    );
+    try {
+      AppLogger.debug('Saving location to database');
+      final location = LocationModel(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        altitude: position.altitude,
+        accuracy: position.accuracy,
+        timestamp: position.timestamp.millisecondsSinceEpoch,
+        address: 'Lat: ${position.latitude.toStringAsFixed(6)}, Lon: ${position.longitude.toStringAsFixed(6)}',
+      );
 
-    await DatabaseHelper.instance.insertLocation(location.toMap());
+      await DatabaseHelper.instance.insertLocation(location.toMap());
+      AppLogger.info('Location saved to database successfully');
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to save location to database', e, stackTrace);
+      // Don't rethrow - we don't want to fail the entire location fetch if DB save fails
+    }
   }
 
   /// Stream location updates

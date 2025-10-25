@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'services/location_service.dart';
+import 'utils/app_logger.dart';
 
 void main() {
+  AppLogger.info('Starting Travel Location Tracker app');
   runApp(const MainApp());
 }
 
@@ -38,10 +40,12 @@ class _LocationScreenState extends State<LocationScreen> {
   @override
   void initState() {
     super.initState();
+    AppLogger.debug('LocationScreen initialized');
     _getCurrentLocation();
   }
 
   Future<void> _getCurrentLocation() async {
+    AppLogger.debug('User requested location refresh');
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -53,7 +57,9 @@ class _LocationScreenState extends State<LocationScreen> {
         _currentPosition = position;
         _isLoading = false;
       });
-    } catch (e) {
+      AppLogger.info('Location displayed to user successfully');
+    } catch (e, stackTrace) {
+      AppLogger.warning('Failed to display location to user', e, stackTrace);
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
