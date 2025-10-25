@@ -1,46 +1,35 @@
-import 'package:geocoding/geocoding.dart';
 import '../services/location_service.dart';
 import '../models/location_model.dart';
 import '../utils/app_logger.dart';
 
-/// Service to manage country detection and visited countries tracking
 class CountryService {
   static final CountryService instance = CountryService._init();
   final LocationService _locationService = LocationService.instance;
 
   CountryService._init();
 
-  /// Get list of unique countries visited based on all tracked locations
   Future<Map<String, CountryVisitInfo>> getVisitedCountries() async {
     try {
-      AppLogger.debug('Getting visited countries from all locations');
+      AppLogger.debug('Getting visited countries from database');
       final locations = await _locationService.getAllLocations();
 
       Map<String, CountryVisitInfo> countries = {};
 
       for (var location in locations) {
-        try {
-          // Get country from coordinates using reverse geocoding
-          final country = await _getCountryFromLocation(location);
+        final country = location.country;
 
-          if (country != null && country.isNotEmpty) {
-            if (countries.containsKey(country)) {
-              // Update existing country info
-              countries[country] = countries[country]!.addVisit(location);
-            } else {
-              // Add new country
-              countries[country] = CountryVisitInfo(
-                countryName: country,
-                firstVisit: location.timestamp,
-                lastVisit: location.timestamp,
-                visitCount: 1,
-                locationIds: [location.id!],
-              );
-            }
+        if (country != null && country.isNotEmpty) {
+          if (countries.containsKey(country)) {
+            countries[country] = countries[country]!.addVisit(location);
+          } else {
+            countries[country] = CountryVisitInfo(
+              countryName: country,
+              firstVisit: location.timestamp,
+              lastVisit: location.timestamp,
+              visitCount: 1,
+              locationIds: [location.id!],
+            );
           }
-        } catch (e) {
-          AppLogger.warning('Failed to get country for location ${location.id}', e);
-          // Continue with next location
         }
       }
 
@@ -49,27 +38,6 @@ class CountryService {
     } catch (e, stackTrace) {
       AppLogger.error('Failed to get visited countries', e, stackTrace);
       rethrow;
-    }
-  }
-
-  /// Get country name from a location using reverse geocoding
-  Future<String?> _getCountryFromLocation(LocationModel location) async {
-    try {
-      final placemarks = await placemarkFromCoordinates(
-        location.latitude,
-        location.longitude,
-      );
-
-      if (placemarks.isNotEmpty) {
-        final country = placemarks.first.country;
-        AppLogger.debug('Detected country: $country for location ${location.id}');
-        return country;
-      }
-
-      return null;
-    } catch (e) {
-      AppLogger.warning('Reverse geocoding failed for location ${location.id}', e);
-      return null;
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import '../database/database_helper.dart';
 import '../models/location_model.dart';
 import '../utils/app_logger.dart';
@@ -88,6 +89,24 @@ class LocationService {
         AppLogger.debug('No active trip found, saving location without trip association');
       }
 
+      // Reverse geocode to get country (with timeout to avoid blocking)
+      String? country;
+      try {
+        AppLogger.debug('Reverse geocoding to get country name');
+        final placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        ).timeout(const Duration(seconds: 5));
+
+        if (placemarks.isNotEmpty) {
+          country = placemarks.first.country;
+          AppLogger.debug('Country detected: $country');
+        }
+      } catch (e) {
+        AppLogger.warning('Failed to reverse geocode for country, will be null', e);
+        // Continue without country - can be filled in later
+      }
+
       final location = LocationModel(
         tripId: tripId,
         latitude: position.latitude,
@@ -96,10 +115,11 @@ class LocationService {
         accuracy: position.accuracy,
         timestamp: position.timestamp.millisecondsSinceEpoch,
         address: 'Lat: ${position.latitude.toStringAsFixed(6)}, Lon: ${position.longitude.toStringAsFixed(6)}',
+        country: country,
       );
 
       await DatabaseHelper.instance.insertLocation(location.toMap());
-      AppLogger.info('Location saved to database successfully${tripId != null ? ' (Trip ID: $tripId)' : ''}');
+      AppLogger.info('Location saved to database successfully${tripId != null ? ' (Trip ID: $tripId)' : ''}${country != null ? ' (Country: $country)' : ''}');
     } catch (e, stackTrace) {
       AppLogger.error('Failed to save location to database', e, stackTrace);
       // Don't rethrow - we don't want to fail the entire location fetch if DB save fails

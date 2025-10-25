@@ -23,7 +23,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2, // Incremented version for schema change
+      version: 3, // Incremented version for country column
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -62,6 +62,7 @@ class DatabaseHelper {
       accuracy $realType,
       timestamp $intType,
       address $textType,
+      country $textTypeNullable,
       FOREIGN KEY (trip_id) REFERENCES trips (id) ON DELETE CASCADE
     )
     ''');
@@ -88,7 +89,13 @@ class DatabaseHelper {
       // Add trip_id column to locations table
       await db.execute('ALTER TABLE locations ADD COLUMN trip_id INTEGER');
 
-      AppLogger.info('Database upgrade completed');
+      AppLogger.info('Database upgraded to version 2');
+    }
+
+    if (oldVersion < 3) {
+      // Add country column to locations table
+      await db.execute('ALTER TABLE locations ADD COLUMN country TEXT');
+      AppLogger.info('Database upgraded to version 3 - added country column');
     }
   }
 
