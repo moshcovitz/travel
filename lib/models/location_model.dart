@@ -8,6 +8,7 @@ class LocationModel {
   final double accuracy;
   final int timestamp;
   final String address;
+  final String? country;
 
   LocationModel({
     this.id,
@@ -18,6 +19,7 @@ class LocationModel {
     required this.accuracy,
     required this.timestamp,
     required this.address,
+    this.country,
   });
 
   /// Convert LocationModel to Map for database storage
@@ -31,6 +33,7 @@ class LocationModel {
       'accuracy': accuracy,
       'timestamp': timestamp,
       'address': address,
+      'country': country,
     };
   }
 
@@ -45,6 +48,7 @@ class LocationModel {
       accuracy: map['accuracy'] as double,
       timestamp: map['timestamp'] as int,
       address: map['address'] as String,
+      country: map['country'] as String?,
     );
   }
 }
