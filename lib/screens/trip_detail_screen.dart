@@ -5,6 +5,12 @@ import '../models/location_model.dart';
 import '../services/trip_service.dart';
 import '../services/photo_service.dart';
 import '../utils/app_logger.dart';
+import '../widgets/dashboard_card.dart';
+import 'trip_photos_screen.dart';
+import 'trip_locations_screen.dart';
+import 'trip_expenses_screen.dart';
+import 'trip_packing_screen.dart';
+import 'trip_documents_screen.dart';
 
 class TripDetailScreen extends StatefulWidget {
   final TripModel trip;
@@ -201,9 +207,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         const SizedBox(height: 16),
         if (_statistics != null) _buildStatisticsCard(),
         if (_statistics != null) const SizedBox(height: 16),
-        _buildPhotosSection(),
-        const SizedBox(height: 16),
-        _buildLocationsSection(),
+        _buildDashboardGrid(),
       ],
     );
   }
@@ -368,87 +372,170 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
   }
 
-  Widget _buildPhotosSection() {
+  Widget _buildDashboardGrid() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Photos (${_photos.length})',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (_isLoadingPhotos)
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(32.0),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          )
-        else if (_photos.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32.0),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.photo_library_outlined,
-                      size: 48,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'No photos taken during this trip',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          )
-        else
-          SizedBox(
-            height: 120,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _photos.length,
-              itemBuilder: (context, index) {
-                return _buildPhotoThumbnail(_photos[index]);
+        // 2-column grid for dashboard cards
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 1.1,
+          children: [
+            DashboardCard(
+              icon: Icons.attach_money,
+              title: 'Expenses',
+              summary: 'Coming soon',
+              color: Colors.green,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TripExpensesScreen(trip: widget.trip),
+                  ),
+                );
               },
             ),
-          ),
+            DashboardCard(
+              icon: Icons.list_alt,
+              title: 'Packing',
+              summary: 'Coming soon',
+              color: Colors.orange,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TripPackingScreen(trip: widget.trip),
+                  ),
+                );
+              },
+            ),
+            DashboardCard(
+              icon: Icons.description,
+              title: 'Documents',
+              summary: 'Coming soon',
+              color: Colors.purple,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TripDocumentsScreen(trip: widget.trip),
+                  ),
+                );
+              },
+            ),
+            DashboardCard(
+              icon: Icons.location_on,
+              title: 'Locations',
+              summary: '${_locations.length} points',
+              color: Colors.blue,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TripLocationsScreen(trip: widget.trip),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // Photos section - prominent full-width card
+        _buildPhotosPreviewCard(),
       ],
     );
   }
 
-  Widget _buildPhotoThumbnail(AssetEntity photo) {
+  Widget _buildPhotosPreviewCard() {
+    return Card(
+      elevation: 2,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TripPhotosScreen(trip: widget.trip),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.photo_library, color: Colors.pink, size: 28),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Photos (${_photos.length})',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right, color: Colors.grey),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (_isLoadingPhotos)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (_photos.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Center(
+                    child: Text(
+                      'No photos yet',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _photos.length > 6 ? 6 : _photos.length,
+                    itemBuilder: (context, index) {
+                      return _buildPhotoPreviewThumbnail(_photos[index]);
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhotoPreviewThumbnail(AssetEntity photo) {
     return FutureBuilder<Widget>(
       future: _buildThumbnailImage(photo),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
-          return GestureDetector(
-            onTap: () => _showPhotoDialog(photo),
-            child: Container(
-              width: 120,
-              height: 120,
-              margin: const EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: snapshot.data!,
-              ),
+          return Container(
+            width: 100,
+            height: 100,
+            margin: const EdgeInsets.only(right: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: snapshot.data!,
             ),
           );
         }
         return Container(
-          width: 120,
-          height: 120,
+          width: 100,
+          height: 100,
           margin: const EdgeInsets.only(right: 8),
           decoration: BoxDecoration(
             color: Colors.grey[200],
@@ -459,6 +546,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       },
     );
   }
+
 
   Future<Widget> _buildThumbnailImage(AssetEntity photo) async {
     final thumbnail = await photo.thumbnailDataWithSize(
@@ -473,107 +561,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     return Icon(Icons.broken_image, color: Colors.grey[400], size: 48);
   }
 
-  Future<void> _showPhotoDialog(AssetEntity photo) async {
-    final file = await photo.file;
-    if (file == null || !mounted) return;
-
-    final photoDate = photo.createDateTime;
-
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBar(
-              title: Text(_formatDateTime(photoDate)),
-              automaticallyImplyLeading: false,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-            Flexible(
-              child: InteractiveViewer(
-                child: Image.file(file),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLocationsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Locations (${_locations.length})',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (_locations.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32.0),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.location_off,
-                      size: 48,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'No locations tracked yet',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          )
-        else
-          ..._locations.map((location) => _buildLocationCard(location)),
-      ],
-    );
-  }
-
-  Widget _buildLocationCard(LocationModel location) {
-    final date = DateTime.fromMillisecondsSinceEpoch(location.timestamp);
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Colors.blue,
-          child: const Icon(Icons.location_on, color: Colors.white, size: 20),
-        ),
-        title: Text(
-          '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(location.address, style: const TextStyle(fontSize: 12)),
-            Text(_formatDateTime(date), style: const TextStyle(fontSize: 11)),
-            Text('Accuracy: ${location.accuracy.toStringAsFixed(1)} m',
-                style: const TextStyle(fontSize: 11)),
-          ],
-        ),
-        isThreeLine: true,
-      ),
-    );
-  }
 
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
