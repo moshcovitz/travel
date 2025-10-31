@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../models/trip_model.dart';
 import '../models/location_model.dart';
+import '../models/expense_model.dart';
 import '../services/trip_service.dart';
 import '../services/photo_service.dart';
+import '../services/expense_service.dart';
+import '../screens/add_expense_screen.dart';
 import '../utils/app_logger.dart';
 
 class TripDetailScreen extends StatefulWidget {
@@ -18,11 +21,15 @@ class TripDetailScreen extends StatefulWidget {
 class _TripDetailScreenState extends State<TripDetailScreen> {
   final TripService _tripService = TripService.instance;
   final PhotoService _photoService = PhotoService.instance;
+  final ExpenseService _expenseService = ExpenseService.instance;
   List<LocationModel> _locations = [];
   Map<String, dynamic>? _statistics;
   List<AssetEntity> _photos = [];
+  List<ExpenseModel> _expenses = [];
+  Map<String, dynamic>? _expenseStatistics;
   bool _isLoading = false;
   bool _isLoadingPhotos = false;
+  bool _isLoadingExpenses = false;
   String _errorMessage = '';
 
   @override
@@ -31,6 +38,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     AppLogger.debug('TripDetailScreen initialized for trip ${widget.trip.id}');
     _loadTripData();
     _loadPhotos();
+    _loadExpenses();
   }
 
   Future<void> _loadTripData() async {
@@ -83,6 +91,96 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       setState(() {
         _isLoadingPhotos = false;
       });
+    }
+  }
+
+  Future<void> _loadExpenses() async {
+    AppLogger.debug('Loading expenses for trip ${widget.trip.id}');
+    setState(() {
+      _isLoadingExpenses = true;
+    });
+
+    try {
+      final expenses = await _expenseService.getExpensesForTrip(widget.trip.id!);
+      final expenseStats = await _expenseService.getExpenseStatistics(widget.trip.id!);
+
+      setState(() {
+        _expenses = expenses;
+        _expenseStatistics = expenseStats;
+        _isLoadingExpenses = false;
+      });
+      AppLogger.info('Loaded ${expenses.length} expenses for trip ${widget.trip.id}');
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to load expenses in UI', e, stackTrace);
+      setState(() {
+        _isLoadingExpenses = false;
+      });
+    }
+  }
+
+  Future<void> _navigateToAddExpense() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddExpenseScreen(tripId: widget.trip.id!),
+      ),
+    );
+
+    if (result == true) {
+      // Reload expenses if an expense was added
+      await _loadExpenses();
+    }
+  }
+
+  Future<void> _deleteExpense(int expenseId) async {
+    try {
+      await _expenseService.deleteExpense(expenseId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Expense deleted successfully!'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        await _loadExpenses(); // Reload expenses
+      }
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to delete expense in UI', e, stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete expense: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteExpense(ExpenseModel expense) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Expense'),
+        content: Text(
+          'Delete expense of ${expense.amount.toStringAsFixed(2)} ${expense.currency}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _deleteExpense(expense.id!);
     }
   }
 
@@ -161,6 +259,12 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         onRefresh: _loadTripData,
         child: _buildBody(),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _navigateToAddExpense,
+        backgroundColor: Colors.green,
+        tooltip: 'Add Expense',
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
     );
   }
 
@@ -201,6 +305,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         const SizedBox(height: 16),
         if (_statistics != null) _buildStatisticsCard(),
         if (_statistics != null) const SizedBox(height: 16),
+        _buildExpensesSection(),
+        const SizedBox(height: 16),
         _buildPhotosSection(),
         const SizedBox(height: 16),
         _buildLocationsSection(),
@@ -366,6 +472,259 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildExpensesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Expenses (${_expenses.length})',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _navigateToAddExpense,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_isLoadingExpenses)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(32.0),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          )
+        else if (_expenses.isEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.receipt_long_outlined,
+                      size: 48,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'No expenses recorded yet',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: _navigateToAddExpense,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add First Expense'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else ...[
+          // Expense summary card
+          if (_expenseStatistics != null) _buildExpenseSummaryCard(),
+          if (_expenseStatistics != null) const SizedBox(height: 12),
+          // Expense list
+          ..._expenses.map((expense) => _buildExpenseCard(expense)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildExpenseSummaryCard() {
+    final totalExpenses = _expenseStatistics!['totalExpenses'] as double;
+    final expenseCount = _expenseStatistics!['expenseCount'] as int;
+    final categoryBreakdown = _expenseStatistics!['categoryBreakdown'] as Map<String, double>;
+
+    return Card(
+      elevation: 3,
+      color: Colors.green.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total Expenses',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '\$${totalExpenses.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_wallet,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                ),
+              ],
+            ),
+            if (categoryBreakdown.isNotEmpty) ...[
+              const Divider(height: 24),
+              Text(
+                'By Category',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...categoryBreakdown.entries.map((entry) {
+                final percentage = (entry.value / totalExpenses * 100);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(_getCategoryIcon(entry.key), size: 16, color: Colors.grey.shade700),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          entry.key,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      Text(
+                        '\$${entry.value.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '(${percentage.toStringAsFixed(0)}%)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpenseCard(ExpenseModel expense) {
+    final date = DateTime.fromMillisecondsSinceEpoch(expense.timestamp);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.green.shade100,
+          child: Icon(
+            _getCategoryIcon(expense.category),
+            color: Colors.green.shade700,
+            size: 20,
+          ),
+        ),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              expense.category,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            Text(
+              '${expense.amount.toStringAsFixed(2)} ${expense.currency}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Colors.green,
+              ),
+            ),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (expense.description != null && expense.description!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                expense.description!,
+                style: const TextStyle(fontSize: 13),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            const SizedBox(height: 4),
+            Text(
+              _formatDateTime(date),
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete, color: Colors.red),
+          onPressed: () => _confirmDeleteExpense(expense),
+          tooltip: 'Delete expense',
+        ),
+        isThreeLine: expense.description != null && expense.description!.isNotEmpty,
+      ),
+    );
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch (category) {
+      case ExpenseCategory.food:
+        return Icons.restaurant;
+      case ExpenseCategory.transportation:
+        return Icons.directions_car;
+      case ExpenseCategory.accommodation:
+        return Icons.hotel;
+      case ExpenseCategory.activities:
+        return Icons.local_activity;
+      case ExpenseCategory.shopping:
+        return Icons.shopping_bag;
+      case ExpenseCategory.other:
+        return Icons.more_horiz;
+      default:
+        return Icons.receipt;
+    }
   }
 
   Widget _buildPhotosSection() {

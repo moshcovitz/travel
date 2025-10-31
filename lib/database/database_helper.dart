@@ -23,7 +23,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3, // Incremented version for country column
+      version: 4, // Incremented version for expenses table
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -67,6 +67,20 @@ class DatabaseHelper {
     )
     ''');
 
+    // Create expenses table with foreign key to trips
+    await db.execute('''
+    CREATE TABLE expenses (
+      id $idType,
+      trip_id $intType,
+      amount $realType,
+      category $textType,
+      description $textTypeNullable,
+      timestamp $intType,
+      currency $textType DEFAULT 'USD',
+      FOREIGN KEY (trip_id) REFERENCES trips (id) ON DELETE CASCADE
+    )
+    ''');
+
     AppLogger.info('Database tables created successfully');
   }
 
@@ -96,6 +110,23 @@ class DatabaseHelper {
       // Add country column to locations table
       await db.execute('ALTER TABLE locations ADD COLUMN country TEXT');
       AppLogger.info('Database upgraded to version 3 - added country column');
+    }
+
+    if (oldVersion < 4) {
+      // Create expenses table
+      await db.execute('''
+      CREATE TABLE expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trip_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        category TEXT NOT NULL,
+        description TEXT,
+        timestamp INTEGER NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'USD',
+        FOREIGN KEY (trip_id) REFERENCES trips (id) ON DELETE CASCADE
+      )
+      ''');
+      AppLogger.info('Database upgraded to version 4 - added expenses table');
     }
   }
 
@@ -217,6 +248,86 @@ class DatabaseHelper {
   Future<int> deleteLocation(int id) async {
     final db = await instance.database;
     return await db.delete('locations', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ============ Expense Management Methods ============
+
+  /// Insert a new expense
+  Future<int> insertExpense(Map<String, dynamic> expense) async {
+    final db = await instance.database;
+    AppLogger.debug('Inserting expense for trip: ${expense['trip_id']}');
+    return await db.insert('expenses', expense);
+  }
+
+  /// Get all expenses
+  Future<List<Map<String, dynamic>>> getAllExpenses() async {
+    final db = await instance.database;
+    return await db.query('expenses', orderBy: 'timestamp DESC');
+  }
+
+  /// Get expenses for a specific trip
+  Future<List<Map<String, dynamic>>> getExpensesByTripId(int tripId) async {
+    final db = await instance.database;
+    return await db.query(
+      'expenses',
+      where: 'trip_id = ?',
+      whereArgs: [tripId],
+      orderBy: 'timestamp DESC',
+    );
+  }
+
+  /// Get expense by ID
+  Future<Map<String, dynamic>?> getExpenseById(int id) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'expenses',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return result.isNotEmpty ? result.first : null;
+  }
+
+  /// Update an expense
+  Future<int> updateExpense(int id, Map<String, dynamic> expense) async {
+    final db = await instance.database;
+    AppLogger.debug('Updating expense ID: $id');
+    return await db.update('expenses', expense, where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Delete an expense
+  Future<int> deleteExpense(int id) async {
+    final db = await instance.database;
+    AppLogger.debug('Deleting expense ID: $id');
+    return await db.delete('expenses', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Get total expenses for a trip
+  Future<double> getTotalExpensesForTrip(int tripId) async {
+    final db = await instance.database;
+    final result = await db.rawQuery(
+      'SELECT SUM(amount) as total FROM expenses WHERE trip_id = ?',
+      [tripId],
+    );
+    if (result.isNotEmpty && result.first['total'] != null) {
+      return result.first['total'] as double;
+    }
+    return 0.0;
+  }
+
+  /// Get expenses grouped by category for a trip
+  Future<Map<String, double>> getExpensesByCategoryForTrip(int tripId) async {
+    final db = await instance.database;
+    final result = await db.rawQuery(
+      'SELECT category, SUM(amount) as total FROM expenses WHERE trip_id = ? GROUP BY category',
+      [tripId],
+    );
+
+    Map<String, double> categoryTotals = {};
+    for (var row in result) {
+      categoryTotals[row['category'] as String] = row['total'] as double;
+    }
+    return categoryTotals;
   }
 
   /// Close database connection
