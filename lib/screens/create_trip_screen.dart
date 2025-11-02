@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/trip_service.dart';
+import '../services/currency_service.dart';
 import '../utils/app_logger.dart';
 
 class CreateTripScreen extends StatefulWidget {
@@ -14,12 +15,16 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _budgetController = TextEditingController();
   bool _isLoading = false;
+  bool _enableBudget = false;
+  String _selectedCurrency = 'USD';
 
   @override
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
+    _budgetController.dispose();
     super.dispose();
   }
 
@@ -34,11 +39,21 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     });
 
     try {
+      double? budget;
+      String? budgetCurrency;
+
+      if (_enableBudget && _budgetController.text.trim().isNotEmpty) {
+        budget = double.tryParse(_budgetController.text.trim());
+        budgetCurrency = _selectedCurrency;
+      }
+
       await _tripService.createTrip(
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim().isEmpty
             ? null
             : _descriptionController.text.trim(),
+        budget: budget,
+        budgetCurrency: budgetCurrency,
       );
 
       AppLogger.info('Trip created successfully: ${_nameController.text}');
@@ -138,6 +153,81 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 maxLines: 3,
                 textCapitalization: TextCapitalization.sentences,
               ),
+              const SizedBox(height: 24),
+
+              // Budget section
+              CheckboxListTile(
+                title: const Text('Set Budget'),
+                subtitle: const Text('Track expenses against a budget'),
+                value: _enableBudget,
+                onChanged: _isLoading
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _enableBudget = value ?? false;
+                        });
+                      },
+                contentPadding: EdgeInsets.zero,
+              ),
+
+              if (_enableBudget) ...[
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextFormField(
+                        controller: _budgetController,
+                        decoration: const InputDecoration(
+                          labelText: 'Budget Amount',
+                          hintText: '1000',
+                          prefixIcon: Icon(Icons.attach_money),
+                          border: OutlineInputBorder(),
+                        ),
+                        enabled: !_isLoading,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        validator: _enableBudget
+                            ? (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Enter amount';
+                                }
+                                final amount = double.tryParse(value);
+                                if (amount == null || amount <= 0) {
+                                  return 'Invalid amount';
+                                }
+                                return null;
+                              }
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _selectedCurrency,
+                        decoration: const InputDecoration(
+                          labelText: 'Currency',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: CurrencyService.commonCurrencies.map((currency) {
+                          return DropdownMenuItem(
+                            value: currency,
+                            child: Text(currency),
+                          );
+                        }).toList(),
+                        onChanged: _isLoading
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  _selectedCurrency = value!;
+                                });
+                              },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 32),
               Container(
                 padding: const EdgeInsets.all(12),

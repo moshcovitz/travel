@@ -6,6 +6,8 @@ class TripModel {
   final int startTimestamp;
   final int? endTimestamp;
   final bool isActive;
+  final double? budget;
+  final String? budgetCurrency;
 
   TripModel({
     this.id,
@@ -14,6 +16,8 @@ class TripModel {
     required this.startTimestamp,
     this.endTimestamp,
     this.isActive = true,
+    this.budget,
+    this.budgetCurrency,
   });
 
   /// Convert TripModel to Map for database storage
@@ -25,6 +29,8 @@ class TripModel {
       'start_timestamp': startTimestamp,
       'end_timestamp': endTimestamp,
       'is_active': isActive ? 1 : 0,
+      'budget': budget,
+      'budget_currency': budgetCurrency,
     };
   }
 
@@ -37,6 +43,8 @@ class TripModel {
       startTimestamp: map['start_timestamp'] as int,
       endTimestamp: map['end_timestamp'] as int?,
       isActive: (map['is_active'] as int) == 1,
+      budget: map['budget'] as double?,
+      budgetCurrency: map['budget_currency'] as String?,
     );
   }
 
@@ -48,6 +56,8 @@ class TripModel {
     int? startTimestamp,
     int? endTimestamp,
     bool? isActive,
+    double? budget,
+    String? budgetCurrency,
   }) {
     return TripModel(
       id: id ?? this.id,
@@ -56,6 +66,8 @@ class TripModel {
       startTimestamp: startTimestamp ?? this.startTimestamp,
       endTimestamp: endTimestamp ?? this.endTimestamp,
       isActive: isActive ?? this.isActive,
+      budget: budget ?? this.budget,
+      budgetCurrency: budgetCurrency ?? this.budgetCurrency,
     );
   }
 }
