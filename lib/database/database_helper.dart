@@ -23,7 +23,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3, // Incremented version for country column
+      version: 5, // Incremented version for budget support
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -47,7 +47,9 @@ class DatabaseHelper {
       description $textTypeNullable,
       start_timestamp $intType,
       end_timestamp $intTypeNullable,
-      is_active $intType DEFAULT 1
+      is_active $intType DEFAULT 1,
+      budget REAL,
+      budget_currency $textTypeNullable
     )
     ''');
 
@@ -63,6 +65,33 @@ class DatabaseHelper {
       timestamp $intType,
       address $textType,
       country $textTypeNullable,
+      FOREIGN KEY (trip_id) REFERENCES trips (id) ON DELETE CASCADE
+    )
+    ''');
+
+    // Create expenses table with foreign key to trips
+    await db.execute('''
+    CREATE TABLE expenses (
+      id $idType,
+      trip_id $intType,
+      title $textType,
+      description $textTypeNullable,
+      amount $realType,
+      currency $textType,
+      category $textType,
+      timestamp $intType,
+      FOREIGN KEY (trip_id) REFERENCES trips (id) ON DELETE CASCADE
+    )
+    ''');
+
+    // Create notes table with foreign key to trips
+    await db.execute('''
+    CREATE TABLE notes (
+      id $idType,
+      trip_id $intType,
+      title $textType,
+      content $textType,
+      timestamp $intType,
       FOREIGN KEY (trip_id) REFERENCES trips (id) ON DELETE CASCADE
     )
     ''');
@@ -96,6 +125,76 @@ class DatabaseHelper {
       // Add country column to locations table
       await db.execute('ALTER TABLE locations ADD COLUMN country TEXT');
       AppLogger.info('Database upgraded to version 3 - added country column');
+    }
+
+    if (oldVersion < 4) {
+      // Check if expenses table exists before creating
+      var result = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='expenses'",
+      );
+
+      if (result.isEmpty) {
+        // Create expenses table
+        await db.execute('''
+        CREATE TABLE expenses (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          trip_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          amount REAL NOT NULL,
+          currency TEXT NOT NULL,
+          category TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          FOREIGN KEY (trip_id) REFERENCES trips (id) ON DELETE CASCADE
+        )
+        ''');
+        AppLogger.info('Created expenses table');
+      } else {
+        AppLogger.info('Expenses table already exists, skipping creation');
+      }
+
+      // Check if notes table exists before creating
+      result = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='notes'",
+      );
+
+      if (result.isEmpty) {
+        // Create notes table
+        await db.execute('''
+        CREATE TABLE notes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          trip_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          FOREIGN KEY (trip_id) REFERENCES trips (id) ON DELETE CASCADE
+        )
+        ''');
+        AppLogger.info('Created notes table');
+      } else {
+        AppLogger.info('Notes table already exists, skipping creation');
+      }
+
+      AppLogger.info('Database upgraded to version 4 - expenses and notes tables ready');
+    }
+
+    if (oldVersion < 5) {
+      // Add budget columns to trips table
+      try {
+        await db.execute('ALTER TABLE trips ADD COLUMN budget REAL');
+        AppLogger.info('Added budget column to trips');
+      } catch (e) {
+        AppLogger.warning('Budget column might already exist');
+      }
+
+      try {
+        await db.execute('ALTER TABLE trips ADD COLUMN budget_currency TEXT');
+        AppLogger.info('Added budget_currency column to trips');
+      } catch (e) {
+        AppLogger.warning('Budget currency column might already exist');
+      }
+
+      AppLogger.info('Database upgraded to version 5 - budget support added');
     }
   }
 
@@ -217,6 +316,98 @@ class DatabaseHelper {
   Future<int> deleteLocation(int id) async {
     final db = await instance.database;
     return await db.delete('locations', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ============ Expense Management Methods ============
+
+  /// Insert a new expense
+  Future<int> insertExpense(Map<String, dynamic> expense) async {
+    final db = await instance.database;
+    AppLogger.debug('Inserting expense: ${expense['title']}');
+    return await db.insert('expenses', expense);
+  }
+
+  /// Get all expenses for a trip
+  Future<List<Map<String, dynamic>>> getExpensesByTripId(int tripId) async {
+    final db = await instance.database;
+    return await db.query(
+      'expenses',
+      where: 'trip_id = ?',
+      whereArgs: [tripId],
+      orderBy: 'timestamp DESC',
+    );
+  }
+
+  /// Get expense by ID
+  Future<Map<String, dynamic>?> getExpenseById(int id) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'expenses',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return result.isNotEmpty ? result.first : null;
+  }
+
+  /// Update an expense
+  Future<int> updateExpense(int id, Map<String, dynamic> expense) async {
+    final db = await instance.database;
+    AppLogger.debug('Updating expense ID: $id');
+    return await db.update('expenses', expense, where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Delete an expense
+  Future<int> deleteExpense(int id) async {
+    final db = await instance.database;
+    AppLogger.debug('Deleting expense ID: $id');
+    return await db.delete('expenses', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ============ Note Management Methods ============
+
+  /// Insert a new note
+  Future<int> insertNote(Map<String, dynamic> note) async {
+    final db = await instance.database;
+    AppLogger.debug('Inserting note: ${note['title']}');
+    return await db.insert('notes', note);
+  }
+
+  /// Get all notes for a trip
+  Future<List<Map<String, dynamic>>> getNotesByTripId(int tripId) async {
+    final db = await instance.database;
+    return await db.query(
+      'notes',
+      where: 'trip_id = ?',
+      whereArgs: [tripId],
+      orderBy: 'timestamp DESC',
+    );
+  }
+
+  /// Get note by ID
+  Future<Map<String, dynamic>?> getNoteById(int id) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'notes',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return result.isNotEmpty ? result.first : null;
+  }
+
+  /// Update a note
+  Future<int> updateNote(int id, Map<String, dynamic> note) async {
+    final db = await instance.database;
+    AppLogger.debug('Updating note ID: $id');
+    return await db.update('notes', note, where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Delete a note
+  Future<int> deleteNote(int id) async {
+    final db = await instance.database;
+    AppLogger.debug('Deleting note ID: $id');
+    return await db.delete('notes', where: 'id = ?', whereArgs: [id]);
   }
 
   /// Close database connection

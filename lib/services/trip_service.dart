@@ -15,6 +15,8 @@ class TripService {
   Future<int> createTrip({
     required String name,
     String? description,
+    double? budget,
+    String? budgetCurrency,
   }) async {
     try {
       AppLogger.info('Creating new trip: $name');
@@ -31,6 +33,8 @@ class TripService {
         description: description,
         startTimestamp: DateTime.now().millisecondsSinceEpoch,
         isActive: true,
+        budget: budget,
+        budgetCurrency: budgetCurrency,
       );
 
       final tripId = await DatabaseHelper.instance.insertTrip(trip.toMap());
